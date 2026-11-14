@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Трекер учебных задач</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #202633;
+      background: #f4f6fa;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      --ink: #202633;
+      --muted: #657083;
+      --line: #dce2ec;
+      --accent: #4759d6;
+      --accent-dark: #3545bd;
+      --danger: #b42318;
+      --surface: #fff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 0;
+      min-height: 100vh;
+      padding: 32px 16px;
+    }
+
+    button, input, select { font: inherit; }
+
+    .app {
+      width: min(100%, 680px);
+      margin: 0 auto;
+    }
+
+    .page-header { margin-bottom: 22px; }
+    h1 { margin: 0 0 6px; font-size: clamp(1.55rem, 5vw, 2rem); line-height: 1.2; }
+    .subtitle { margin: 0; color: var(--muted); line-height: 1.5; }
+
+    .panel {
+      margin-top: 16px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--surface);
+      box-shadow: 0 5px 18px rgb(30 45 80 / 5%);
+    }
+
+    h2 { margin: 0 0 16px; font-size: 1.1rem; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 12px;
+      border-radius: 12px;
+      background: #f5f6fc;
+    }
+
+    .stat-label { display: block; color: var(--muted); font-size: .82rem; line-height: 1.35; }
+    .stat-value { display: block; margin-top: 4px; font-size: 1.12rem; font-weight: 700; }
+    .progress-track { margin-top: 16px; }
+    progress { display: block; width: 100%; height: 10px; accent-color: var(--accent); }
+    .progress-caption { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; color: var(--muted); font-size: .88rem; }
+
+    .task-form { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto; gap: 12px; align-items: end; }
+    .field { min-width: 0; }
+    label { display: block; margin-bottom: 6px; font-size: .9rem; font-weight: 600; }
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      min-height: 44px;
+      padding: 9px 11px;
+      border: 1px solid #b8c1d1;
+      border-radius: 9px;
+      color: var(--ink);
+      background: var(--surface);
+    }
+    input:focus, select:focus, button:focus-visible {
+      outline: 3px solid rgb(71 89 214 / 24%);
+      outline-offset: 2px;
+      border-color: var(--accent);
+    }
+
+    .error { min-height: 1.2em; margin: 5px 0 0; color: var(--danger); font-size: .82rem; line-height: 1.35; }
+    .button {
+      min-height: 44px;
+      padding: 9px 15px;
+      border: 0;
+      border-radius: 9px;
+      color: #fff;
+      background: var(--accent);
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .button:hover { background: var(--accent-dark); }
+
+    .list-header { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin-bottom: 12px; }
+    .list-header h2 { margin: 0; }
+    .filter { width: min(100%, 180px); }
+    .task-list { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+    .task {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+    }
+    .task-check { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--accent); }
+    .task-label { display: flex; flex: 1 1 auto; min-width: 0; align-items: center; gap: 10px; margin: 0; cursor: pointer; }
+    .task-title { min-width: 0; overflow-wrap: anywhere; }
+    .task.done .task-title { color: var(--muted); text-decoration: line-through; }
+    .task-hours { flex: 0 0 auto; color: var(--muted); white-space: nowrap; }
+    .delete-button {
+      flex: 0 0 auto;
+      min-height: 38px;
+      padding: 7px 10px;
+      border: 1px solid #d5dbe5;
+      border-radius: 8px;
+      color: #414b5d;
+      background: #fff;
+      cursor: pointer;
+    }
+    .delete-button:hover { border-color: #aab3c2; background: #f8f9fb; }
+    .empty-state { margin: 0; padding: 18px 8px; color: var(--muted); text-align: center; }
+
+    @media (max-width: 520px) {
+      body { padding: 22px 12px; }
+      .panel { padding: 16px; border-radius: 13px; }
+      .task-form { grid-template-columns: minmax(0, 1fr) minmax(92px, 112px); gap: 10px; }
+      .task-form .button { grid-column: 1 / -1; width: 100%; }
+      .task { gap: 9px; padding: 10px; }
+      .delete-button { padding-inline: 8px; }
+    }
+
+    @media (max-width: 360px) {
+      .summary { gap: 6px; }
+      .stat { padding: 9px 7px; }
+      .stat-label { font-size: .76rem; }
+      .task-hours { font-size: .88rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="page-header">
+      <h1>Учебные задачи</h1>
+      <p class="subtitle">Мини-трекер задач на неделю</p>
+    </header>
+
+    <section class="panel" aria-labelledby="summary-heading">
+      <h2 id="summary-heading">Общий прогресс</h2>
+      <div class="summary" aria-live="polite">
+        <div class="stat"><span class="stat-label">Всего часов</span><span class="stat-value" id="total-hours">8 ч</span></div>
+        <div class="stat"><span class="stat-label">Выполнено</span><span class="stat-value" id="done-hours">2 ч</span></div>
+        <div class="stat"><span class="stat-label">Задач</span><span class="stat-value" id="task-count">3</span></div>
+      </div>
+      <div class="progress-track">
+        <progress id="progress-bar" max="100" value="25" aria-label="Прогресс выполнения"></progress>
+        <div class="progress-caption"><span>Выполнение задач</span><strong id="progress-value">25%</strong></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="add-heading">
+      <h2 id="add-heading">Добавить задачу</h2>
+      <form class="task-form" id="task-form" novalidate>
+        <div class="field">
+          <label for="task-title">Название задачи</label>
+          <input id="task-title" name="title" type="text" autocomplete="off" aria-describedby="title-error">
+          <p class="error" id="title-error" aria-live="polite"></p>
+        </div>
+        <div class="field">
+          <label for="task-hours">Часы</label>
+          <input id="task-hours" name="hours" type="number" inputmode="decimal" min="0.5" max="24" step="0.5" aria-describedby="hours-error">
+          <p class="error" id="hours-error" aria-live="polite"></p>
+        </div>
+        <button class="button" type="submit">Добавить</button>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="tasks-heading">
+      <div class="list-header">
+        <h2 id="tasks-heading">Список задач</h2>
+        <div class="filter">
+          <label for="task-filter">Показать</label>
+          <select id="task-filter">
+            <option value="all">Все</option>
+            <option value="active">Активные</option>
+            <option value="done">Готовые</option>
+          </select>
+        </div>
+      </div>
+      <ul class="task-list" id="task-list" aria-label="Задачи"></ul>
+      <p class="empty-state" id="empty-state" hidden>Задач для этого фильтра нет.</p>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const tasks = [
+        { id: "reading", title: "Чтение", hours: 2, done: true },
+        { id: "practice", title: "Практика", hours: 4, done: false },
+        { id: "review", title: "Повторение", hours: 2, done: false }
+      ];
+
+      const form = document.getElementById("task-form");
+      const titleInput = document.getElementById("task-title");
+      const hoursInput = document.getElementById("task-hours");
+      const titleError = document.getElementById("title-error");
+      const hoursError = document.getElementById("hours-error");
+      const list = document.getElementById("task-list");
+      const filter = document.getElementById("task-filter");
+      const emptyState = document.getElementById("empty-state");
+      const totalHoursOutput = document.getElementById("total-hours");
+      const doneHoursOutput = document.getElementById("done-hours");
+      const taskCountOutput = document.getElementById("task-count");
+      const progressBar = document.getElementById("progress-bar");
+      const progressOutput = document.getElementById("progress-value");
+      const hourFormat = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
+
+      function formatHours(value) {
+        return `${hourFormat.format(value)} ч`;
+      }
+
+      function updateSummary() {
+        const totalHours = tasks.reduce((sum, task) => sum + task.hours, 0);
+        const doneHours = tasks.reduce((sum, task) => sum + (task.done ? task.hours : 0), 0);
+        const progress = totalHours === 0 ? 0 : Math.round(100 * doneHours / totalHours);
+
+        totalHoursOutput.textContent = formatHours(totalHours);
+        doneHoursOutput.textContent = formatHours(doneHours);
+        taskCountOutput.textContent = String(tasks.length);
+        progressBar.value = progress;
+        progressOutput.textContent = `${progress}%`;
+      }
+
+      function renderTasks() {
+        const visibleTasks = tasks.filter((task) => {
+          if (filter.value === "active") return !task.done;
+          if (filter.value === "done") return task.done;
+          return true;
+        });
+
+        list.replaceChildren();
+        for (const task of visibleTasks) {
+          const item = document.createElement("li");
+          item.className = `task${task.done ? " done" : ""}`;
+
+          const checkbox = document.createElement("input");
+          checkbox.className = "task-check";
+          checkbox.type = "checkbox";
+          checkbox.checked = task.done;
+          checkbox.dataset.action = "toggle";
+          checkbox.dataset.id = task.id;
+          checkbox.id = `task-check-${task.id}`;
+          checkbox.setAttribute("aria-label", `Отметить задачу «${task.title}» выполненной`);
+
+          const label = document.createElement("label");
+          label.className = "task-label";
+          label.htmlFor = checkbox.id;
+
+          const title = document.createElement("span");
+          title.className = "task-title";
+          title.textContent = task.title;
+          const hours = document.createElement("span");
+          hours.className = "task-hours";
+          hours.textContent = formatHours(task.hours);
+          label.append(title, hours);
+
+          const removeButton = document.createElement("button");
+          removeButton.className = "delete-button";
+          removeButton.type = "button";
+          removeButton.textContent = "Удалить";
+          removeButton.setAttribute("aria-label", `Удалить задачу «${task.title}»`);
+          removeButton.dataset.action = "delete";
+          removeButton.dataset.id = task.id;
+
+          item.append(checkbox, label, removeButton);
+          list.append(item);
+        }
+        emptyState.hidden = visibleTasks.length !== 0;
+      }
+
+      function render() {
+        updateSummary();
+        renderTasks();
+      }
+
+      function clearError(input, error) {
+        error.textContent = "";
+        input.removeAttribute("aria-invalid");
+      }
+
+      titleInput.addEventListener("input", () => clearError(titleInput, titleError));
+      hoursInput.addEventListener("input", () => clearError(hoursInput, hoursError));
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        clearError(titleInput, titleError);
+        clearError(hoursInput, hoursError);
+
+        const title = titleInput.value.trim();
+        const rawHours = hoursInput.value.trim();
+        const hours = rawHours === "" ? NaN : Number(rawHours);
+        const isValidHours = Number.isFinite(hours)
+          && hours >= 0.5
+          && hours <= 24
+          && Math.abs(hours * 2 - Math.round(hours * 2)) < 1e-9;
+
+        let isValid = true;
+        if (title === "") {
+          titleError.textContent = "Введите название задачи.";
+          titleInput.setAttribute("aria-invalid", "true");
+          isValid = false;
+        }
+        if (!isValidHours) {
+          hoursError.textContent = rawHours === ""
+            ? "Введите количество часов."
+            : "Укажите число от 0,5 до 24 с шагом 0,5.";
+          hoursInput.setAttribute("aria-invalid", "true");
+          isValid = false;
+        }
+        if (!isValid) return;
+
+        const id = globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
+          ? globalThis.crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        tasks.push({ id, title, hours, done: false });
+        form.reset();
+        render();
+        titleInput.focus();
+      });
+
+      list.addEventListener("change", (event) => {
+        const control = event.target;
+        if (!(control instanceof HTMLInputElement) || control.dataset.action !== "toggle") return;
+        const task = tasks.find((item) => item.id === control.dataset.id);
+        if (!task) return;
+        task.done = control.checked;
+        render();
+      });
+
+      list.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-action='delete']");
+        if (!button) return;
+        const index = tasks.findIndex((item) => item.id === button.dataset.id);
+        if (index < 0) return;
+        tasks.splice(index, 1);
+        render();
+      });
+
+      filter.addEventListener("change", renderTasks);
+      render();
+    })();
+  </script>
+</body>
+</html>
