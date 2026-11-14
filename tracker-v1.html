@@ -139,7 +139,16 @@
       box-shadow: 0 0 0 3px rgb(101 88 211 / 13%);
     }
 
+    .field[aria-invalid="true"] { border-color: var(--red); }
+
     .field::placeholder { color: #a0a6b5; }
+
+    .field-error {
+      min-height: 1.25em;
+      margin: 5px 0 0;
+      color: var(--red);
+      font-size: 12px;
+    }
 
     .button {
       display: inline-flex;
@@ -213,7 +222,7 @@
       display: flex;
       align-items: center;
       gap: 13px;
-      padding: 14px 14px;
+      padding: 14px;
       border: 1px solid var(--line);
       border-radius: 13px;
       background: #fff;
@@ -325,11 +334,11 @@
     <section class="summary" aria-label="Сводка по задачам">
       <div class="stat">
         <span class="stat-label">Всего часов</span>
-        <strong class="stat-value" id="total-hours">0</strong>
+        <strong class="stat-value" id="total-hours">0 ч</strong>
       </div>
       <div class="stat">
-        <span class="stat-label">Готово</span>
-        <strong class="stat-value" id="done-count">0 из 0</strong>
+        <span class="stat-label">Выполнено часов</span>
+        <strong class="stat-value" id="done-hours">0 из 0 ч</strong>
       </div>
       <div class="stat">
         <span class="stat-label">Выполнено</span>
@@ -350,28 +359,37 @@
 
     <section class="panel" aria-labelledby="add-title">
       <h2 class="form-title" id="add-title">Добавить задачу</h2>
-      <form class="add-form" id="add-form">
-        <label class="visually-hidden" for="task-name">Название задачи</label>
-        <input
-          class="field"
-          id="task-name"
-          name="name"
-          type="text"
-          placeholder="Например, лекция по анализу"
-          maxlength="100"
-          required
-        >
-        <label class="visually-hidden" for="task-hours">Оценка в часах</label>
-        <input
-          class="field"
-          id="task-hours"
-          name="hours"
-          type="number"
-          min="0.25"
-          step="0.25"
-          placeholder="Часы"
-          required
-        >
+      <form class="add-form" id="add-form" novalidate>
+        <div>
+          <label class="visually-hidden" for="task-name">Название задачи</label>
+          <input
+            class="field"
+            id="task-name"
+            name="name"
+            type="text"
+            placeholder="Например, лекция по анализу"
+            maxlength="100"
+            aria-describedby="name-error"
+          >
+          <p class="field-error" id="name-error" aria-live="polite"></p>
+        </div>
+
+        <div>
+          <label class="visually-hidden" for="task-hours">Оценка в часах</label>
+          <input
+            class="field"
+            id="task-hours"
+            name="hours"
+            type="number"
+            min="0.5"
+            max="24"
+            step="0.5"
+            placeholder="Часы"
+            aria-describedby="hours-error"
+          >
+          <p class="field-error" id="hours-error" aria-live="polite"></p>
+        </div>
+
         <button class="button button-primary" type="submit">
           <span aria-hidden="true">＋</span> Добавить
         </button>
@@ -403,8 +421,10 @@
       const form = document.getElementById("add-form");
       const nameInput = document.getElementById("task-name");
       const hoursInput = document.getElementById("task-hours");
+      const nameError = document.getElementById("name-error");
+      const hoursError = document.getElementById("hours-error");
       const totalHoursEl = document.getElementById("total-hours");
-      const doneCountEl = document.getElementById("done-count");
+      const doneHoursEl = document.getElementById("done-hours");
       const completionEl = document.getElementById("completion");
       const progressTrack = document.getElementById("progress-track");
       const progressFill = document.getElementById("progress-fill");
@@ -413,16 +433,33 @@
       let tasks = loadTasks();
       let currentFilter = "all";
 
+      function isValidHours(value) {
+        return Number.isFinite(value)
+          && value >= 0.5
+          && value <= 24
+          && Math.abs(value * 2 - Math.round(value * 2)) < 1e-9;
+      }
+
       function loadTasks() {
         try {
           const saved = localStorage.getItem(STORAGE_KEY);
           if (saved !== null) {
             const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed)) return parsed;
+            if (Array.isArray(parsed)) {
+              return parsed.filter(task =>
+                task
+                && typeof task.id === "string"
+                && typeof task.name === "string"
+                && task.name.trim() !== ""
+                && isValidHours(Number(task.hours))
+                && typeof task.done === "boolean"
+              );
+            }
           }
         } catch (error) {
           // Если хранилище недоступно или данные повреждены, используем примеры.
         }
+
         return initialTasks.map(task => ({ ...task }));
       }
 
@@ -430,14 +467,15 @@
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
         } catch (error) {
-          // Приложение продолжит работать до закрытия вкладки.
+          // Трекер продолжит работать до закрытия вкладки.
         }
       }
 
       function formatHours(hours) {
-        return Number.isInteger(hours)
+        const formatted = Number.isInteger(hours)
           ? String(hours)
           : String(Number(hours.toFixed(2))).replace(".", ",");
+        return `${formatted} ч`;
       }
 
       function render() {
@@ -445,13 +483,13 @@
         const doneHours = tasks
           .filter(task => task.done)
           .reduce((sum, task) => sum + Number(task.hours), 0);
-        const doneCount = tasks.filter(task => task.done).length;
         const percent = totalHours > 0
           ? Math.round((doneHours / totalHours) * 100)
           : 0;
 
         totalHoursEl.textContent = formatHours(totalHours);
-        doneCountEl.textContent = `${doneCount} из ${tasks.length}`;
+        doneHoursEl.textContent =
+          `${formatHours(doneHours).replace(" ч", "")} из ${formatHours(totalHours)}`;
         completionEl.textContent = `${percent}%`;
         progressFill.style.width = `${percent}%`;
         progressTrack.setAttribute("aria-valuenow", String(percent));
@@ -482,10 +520,15 @@
           checkbox.className = "task-check";
           checkbox.type = "checkbox";
           checkbox.checked = task.done;
-          checkbox.setAttribute("aria-label", `Отметить задачу «${task.name}» как выполненную`);
+          checkbox.setAttribute(
+            "aria-label",
+            `Отметить задачу «${task.name}» как выполненную`
+          );
           checkbox.addEventListener("change", () => {
             tasks = tasks.map(entry =>
-              entry.id === task.id ? { ...entry, done: checkbox.checked } : entry
+              entry.id === task.id
+                ? { ...entry, done: checkbox.checked }
+                : entry
             );
             saveTasks();
             render();
@@ -500,13 +543,13 @@
 
           const status = document.createElement("span");
           status.className = "task-status";
-          status.textContent = task.done ? "Готово" : "В планах";
+          status.textContent = task.done ? "Готово" : "Активно";
 
           main.append(title, status);
 
           const hours = document.createElement("span");
           hours.className = "task-hours";
-          hours.textContent = `${formatHours(Number(task.hours))} ч`;
+          hours.textContent = formatHours(Number(task.hours));
 
           const remove = document.createElement("button");
           remove.className = "delete-button";
@@ -524,16 +567,48 @@
         }
       }
 
+      function setError(input, errorElement, message) {
+        errorElement.textContent = message;
+        input.setAttribute("aria-invalid", "true");
+      }
+
+      function clearError(input, errorElement) {
+        errorElement.textContent = "";
+        input.removeAttribute("aria-invalid");
+      }
+
+      nameInput.addEventListener("input", () => clearError(nameInput, nameError));
+      hoursInput.addEventListener("input", () => clearError(hoursInput, hoursError));
+
       form.addEventListener("submit", event => {
         event.preventDefault();
 
-        const name = nameInput.value.trim();
-        const hours = Number(hoursInput.value);
+        clearError(nameInput, nameError);
+        clearError(hoursInput, hoursError);
 
-        if (!name || !Number.isFinite(hours) || hours <= 0) return;
+        const name = nameInput.value.trim();
+        const rawHours = hoursInput.value.trim();
+        const hours = rawHours === "" ? NaN : Number(rawHours);
+        let isValid = true;
+
+        if (name === "") {
+          setError(nameInput, nameError, "Введите название задачи.");
+          isValid = false;
+        }
+
+        if (!isValidHours(hours)) {
+          const message = rawHours === ""
+            ? "Введите количество часов."
+            : "Укажите число от 0,5 до 24 с шагом 0,5.";
+          setError(hoursInput, hoursError, message);
+          isValid = false;
+        }
+
+        if (!isValid) return;
 
         tasks.push({
-          id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+          id: globalThis.crypto?.randomUUID?.()
+            ?? `${Date.now()}-${Math.random()}`,
           name,
           hours,
           done: false
@@ -541,6 +616,8 @@
 
         saveTasks();
         form.reset();
+        clearError(nameInput, nameError);
+        clearError(hoursInput, hoursError);
         nameInput.focus();
         render();
       });
